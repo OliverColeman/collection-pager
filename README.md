@@ -60,17 +60,6 @@ you can call three functions on `CollectionPagers`:
   Eg `CollectionPagers.get(myPagerId)`.
 
 
-## Options
-
-### *(alpha)* fastCount
-Eg: `{fastCount: true}`
-Default: **false**
-
-This is the equivalent of using a meteor method that returns the current count on a collection and then observing subsequent changes to the collection after skipping all documents in the initial count.
-
-This change is not without trade-offs; things removed from your data set included in the initial count call will not be reflected in the total count. For most big counts it will not be noticeable if a count is slightly off, but still gives the user an idea of how the collection is growing.
-
-
 ## Acknowledgements
 
 The code in this package was inspired by [ros:publish-counts](https://github.com/BrianRosamilia/publish-counts).

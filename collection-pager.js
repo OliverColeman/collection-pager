@@ -8,60 +8,71 @@ if (Meteor.isServer) {
 
     options = options || {};
     let initializing = true;
-    let handle;
-    let totalCount = 0;
-    const pageCursor = collection.find(querySelector, queryOptions);
     const totalCursor = collection.find(querySelector);
+    const pageCursor = collection.find(querySelector, queryOptions);
+    let pagerDoc = {
+      totalCount: totalCursor.count(),
+      skip: queryOptions.skip,
+      limit: queryOptions.limit,
+      currentIds: [],
+    };
+    let totalHandle, pageHandle;
 
-    if (options.fastCount ) {
-      if (totalCursor._cursorDescription.options.limit)
-        throw new Error("collection-pager: there is no reason to use fastCount with a limit on the total count. fastCount is to enable large data sets to have fast but potentially inaccurate cursors.");
-
-      totalCount = totalCursor.count();
-      totalCursor._cursorDescription.options.skip = totalCount;
+    const updatePagerDocTotal = (amount) => {
+      pagerDoc.totalCount += amount;
+      return pagerDoc;
+    }
+    const updatePagerDocDocs = () => {
+      pagerDoc.currentIds = pageCursor.map(doc => doc._id);
+      return pagerDoc;
     }
 
-    const makePagerDoc = (totalCount) => {
-      return {
-        totalCount,
-        skip: queryOptions.skip,
-        limit: queryOptions.limit,
-        currentIds: pageCursor.map(doc => doc._id),
-      };
-    }
-
-    const observers = {
+    const totalCursorObservers = {
       added: function (doc) {
-        totalCount += 1;
         if (!initializing) {
-          self.changed('collectionpagers', id, makePagerDoc(totalCount));
+          self.changed('collectionpagers', id, updatePagerDocTotal(1));
         }
       },
       removed: function (doc) {
-        totalCount -= 1;
-        self.changed('collectionpagers', id, makePagerDoc(totalCount));
-      }
+        self.changed('collectionpagers', id, updatePagerDocTotal(-1));
+      },
     };
 
-    self.added('collectionpagers', id, makePagerDoc(totalCursor.count()));
+    const pageCursorObservers = {
+      added: function (doc) {
+        if (!initializing) {
+          self.changed('collectionpagers', id, updatePagerDocDocs());
+        }
+      },
+      removed: function (doc) {
+        self.changed('collectionpagers', id, updatePagerDocDocs());
+      },
+      changed: function (doc) {
+        self.changed('collectionpagers', id, updatePagerDocDocs());
+      },
+    };
+
+    self.added('collectionpagers', id, updatePagerDocDocs());
 
     if (!options.nonReactive) {
-      // Only observe totalCursor, the list of published docs according to pageCursor will also be updated.
-      handle = totalCursor.observe(observers);
+      pageHandle = pageCursor.observe(pageCursorObservers);
+      totalHandle = totalCursor.observe(totalCursorObservers);
     }
 
     initializing = false;
 
     self.onStop(function () {
-      if (handle)
-        handle.stop();
+      totalHandle.stop();
+      pageHandle.stop();
     });
 
     return {
       stop: function () {
-        if (handle) {
-          handle.stop();
-          handle = undefined;
+        if (totalHandle) {
+          totalHandle.stop();
+          totalHandle = undefined;
+          pageHandle.stop();
+          pageHandle = undefined;
         }
       },
 
